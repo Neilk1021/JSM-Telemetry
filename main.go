@@ -1,30 +1,53 @@
 package main
 
-import ( 
+import (
+	"context"
 	"fmt"
-	"errors"
+	"net/http"
+	"os"
+	"time"
 )
 
-func divide(a, b float64) (float64, error) {
-	if b == 0 {
-		return 0, errors.New("cannot divide by zero")
-	}
-
-	return a / b, nil 
+type TelemetryEvent struct {
+	PlayerID  string    `json:"player_id"`
+	EventType string    `json:"event_type"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 func main() {
-	result, err := divide(10,2)
+
+	ctx := context.Background()
+
+	connStr := os.Getenv("DATABASE_URL")
+
+	store, err := NewTelemetryStore(ctx, connStr)
 	if err != nil {
-		fmt.Println("error:", err)
-	} else {
-		fmt.Println("result:", result)
+		panic(err)
+	}
+	defer store.Close()
+
+	apiKey := os.Getenv("TELEMETRY_API_KEY")
+	if apiKey == "" {
+		panic("TELEMETRY_API_KEY must be set")
 	}
 
-	result, err = divide(10, 0)
-	if err != nil {
-		fmt.Println("error:", err)
-	} else {
-		fmt.Println("result", result)
-	}
+	eventCh := make(chan TelemetryEvent, 101)
+
+	eventHandler := NewEventHandler(eventCh, apiKey)
+	statsHandler := NewStatsHandler(store)
+
+	http.HandleFunc("/event", eventHandler.PostEvent)
+	http.HandleFunc("/stats", statsHandler.GetStats)
+
+	go func() {
+		for event := range eventCh {
+			err := store.StoreEvent(ctx, event)
+			if err != nil {
+				fmt.Println("failed to store event:", err)
+			}
+		}
+	}()
+
+	fmt.Println("listening on :9082")
+	http.ListenAndServe(":9082", nil)
 }
