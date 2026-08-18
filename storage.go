@@ -2,20 +2,17 @@ package main
 
 import (
 	"context"
+	"telemetry/events"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type EventSink interface {
-	Store(ctx context.Context, event TelemetryEvent) error
-	Get(ctx context.Context) ([]TelemetryEvent, error)
-}
 
 type TelemetryStore struct {
 	pool *pgxpool.Pool
 }
 
-func (t *TelemetryStore) StoreEvent(ctx context.Context, event TelemetryEvent) error {
+func (t *TelemetryStore) StoreEvent(ctx context.Context, event events.TelemetryEvent) error {
 	_, err := t.pool.Exec(ctx,
 		"INSERT INTO events (player_id, event_type, timestamp) VALUES ($1, $2, $3)",
 		event.PlayerID, event.EventType, event.Timestamp,
@@ -24,7 +21,7 @@ func (t *TelemetryStore) StoreEvent(ctx context.Context, event TelemetryEvent) e
 	return err
 }
 
-func (t *TelemetryStore) GetAllEvents(ctx context.Context) ([]TelemetryEvent, error) {
+func (t *TelemetryStore) GetAllEvents(ctx context.Context) ([]events.TelemetryEvent, error) {
 	rows, err := t.pool.Query(ctx,
 		"SELECT player_id, event_type, timestamp FROM events",
 	)
@@ -34,19 +31,71 @@ func (t *TelemetryStore) GetAllEvents(ctx context.Context) ([]TelemetryEvent, er
 	}
 
 	defer rows.Close()
-	var events []TelemetryEvent
+	var telemetryEvents []events.TelemetryEvent
 
 	for rows.Next() {
-		var e TelemetryEvent
+		var e events.TelemetryEvent
 
 		if err := rows.Scan(&e.PlayerID, &e.EventType, &e.Timestamp); err != nil {
 			return nil, err
 		}
 
-		events = append(events, e)
+		telemetryEvents = append(telemetryEvents, e)
 	}
 
-	return events, nil
+	return telemetryEvents, nil
+}
+
+func (t *TelemetryStore) StoreMapAttempt(ctx context.Context, event events.MapAttemptEvent) error {
+	tx, err := t.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var id int
+	err = tx.QueryRow(ctx,
+		`INSERT INTO map_attempts 
+    			( 
+				 player_id, 
+				 map_name, 
+				 passed, 
+    			 attempts_to_complete, 
+    			 level_rounds, 
+    			 ram_used, 
+    			 cpu_used, 
+    			 duration, 
+    			 first_time, 
+    			 timestamp
+    			 ) 
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+		event.PlayerID, event.MapName, event.Passed, event.Attempts, event.Rounds,
+		event.RamUsed, event.CpuUsed, event.Duration, event.FirstTime, time.Now(),
+	).Scan(&id)
+
+	if err != nil {
+		return err
+	}
+
+	for _, e := range event.Towers {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO map_tower_usage 
+    				(map_attempt_id, 
+    				 tower_type, 
+    				 count, 
+    				 level
+    				 ) 
+					VALUES  ($1, $2, $3, $4)`,
+			id, e.Tower, e.Count, e.Level,
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	err = tx.Commit(ctx)
+	return err
 }
 
 func NewTelemetryStore(ctx context.Context, connStr string) (*TelemetryStore, error) {

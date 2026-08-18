@@ -5,14 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
+	"telemetry/events"
 )
-
-type TelemetryEvent struct {
-	PlayerID  string    `json:"player_id"`
-	EventType string    `json:"event_type"`
-	Timestamp time.Time `json:"timestamp"`
-}
 
 func main() {
 
@@ -31,11 +25,14 @@ func main() {
 		panic("TELEMETRY_API_KEY must be set")
 	}
 
-	eventCh := make(chan TelemetryEvent, 101)
+	eventCh := make(chan events.TelemetryEvent, 101)
+	mapCh := make(chan events.MapAttemptEvent, 101)
 
 	eventHandler := NewEventHandler(eventCh, apiKey)
 	statsHandler := NewStatsHandler(store)
+	mapAttemptHandler := NewMapHandler(mapCh, apiKey)
 
+	http.HandleFunc("/map_attempt", mapAttemptHandler.PostEvent)
 	http.HandleFunc("/event", eventHandler.PostEvent)
 	http.HandleFunc("/stats", statsHandler.GetStats)
 

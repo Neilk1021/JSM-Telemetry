@@ -1,4 +1,4 @@
-module learn
+module telemetry 
 
 go 1.26.6
 
