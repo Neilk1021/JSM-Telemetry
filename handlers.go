@@ -36,18 +36,18 @@ func (m *MapHandler) GetApiKey() string {
 func IsPostMethod(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func ValidApiKey(w http.ResponseWriter, r *http.Request, p PostHandler) bool {
 	providedKey := r.Header.Get("X-API-Key")
 	if providedKey != p.GetApiKey() {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func ValidatePostRequest(w http.ResponseWriter, r *http.Request, p PostHandler) bool {
