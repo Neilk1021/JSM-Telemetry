@@ -2,12 +2,6 @@ package events
 
 import "time"
 
-type TelemetryEvent struct {
-	PlayerID  string    `json:"player_id"`
-	EventType string    `json:"event_type"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
 type MapAttemptEvent struct {
 	PlayerID  string          `json:"player_id"`
 	MapName   string          `json:"map_name"`
@@ -28,14 +22,14 @@ type MapTowerUsage struct {
 	Count int    `json:"count"`
 }
 
-type Timestamped interface {
-	SetTimestamp(t time.Time)
-}
-
-func (e *TelemetryEvent) SetTimestamp(t time.Time) {
-	e.Timestamp = t
-}
-
 func (m *MapAttemptEvent) SetTimestamp(t time.Time) {
 	m.Timestamp = t
+}
+
+type MapSummaryStat struct {
+	MapName       string  `json:"map_name"`
+	TotalAttempts int     `json:"total_attempts"`
+	PassRate      float64 `json:"pass_rate"`
+	AvgDuration   float64 `json:"avg_duration"`
+	AvgRounds     float64 `json:"avg_rounds"`
 }
