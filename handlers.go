@@ -61,7 +61,7 @@ func ValidatePostRequest(w http.ResponseWriter, r *http.Request, p PostHandler) 
 	return true
 }
 
-func (s *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+func (s *StatsHandler) GetEventStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -73,6 +73,25 @@ func (s *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(&telemetryEvents); err != nil {
+		http.Error(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *StatsHandler) GetMapStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	mapAttempts, err := s.store.GetAllMapAttempts(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if err := json.NewEncoder(w).Encode(&mapAttempts); err != nil {
 		http.Error(w, "bad_request", http.StatusBadRequest)
 		return
 	}

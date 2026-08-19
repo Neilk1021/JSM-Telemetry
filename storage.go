@@ -98,6 +98,69 @@ func (t *TelemetryStore) StoreMapAttempt(ctx context.Context, event events.MapAt
 	return err
 }
 
+func (t *TelemetryStore) GetAllMapAttempts(ctx context.Context) ([]events.MapAttemptEvent, error) {
+	rows, err := t.pool.Query(ctx,
+		`SELECT id, player_id, map_name, passed, attempts_to_complete, level_rounds,
+		        ram_used, cpu_used, duration, first_time, timestamp
+		 FROM map_attempts`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	attemptsByID := make(map[int]*events.MapAttemptEvent)
+	var order []int
+
+	for rows.Next() {
+		var id int
+		var e events.MapAttemptEvent
+
+		if err := rows.Scan(&id, &e.PlayerID, &e.MapName, &e.Passed, &e.Attempts,
+			&e.Rounds, &e.RamUsed, &e.CpuUsed, &e.Duration, &e.FirstTime, &e.Timestamp); err != nil {
+			return nil, err
+		}
+
+		e.Towers = []events.MapTowerUsage{}
+		attemptsByID[id] = &e
+		order = append(order, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	towerRows, err := t.pool.Query(ctx,
+		`SELECT map_attempt_id, tower_type, count, level FROM map_tower_usage`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer towerRows.Close()
+
+	for towerRows.Next() {
+		var mapAttemptID int
+		var tower events.MapTowerUsage
+
+		if err := towerRows.Scan(&mapAttemptID, &tower.Tower, &tower.Count, &tower.Level); err != nil {
+			return nil, err
+		}
+
+		if attempt, ok := attemptsByID[mapAttemptID]; ok {
+			attempt.Towers = append(attempt.Towers, tower)
+		}
+	}
+	if err := towerRows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]events.MapAttemptEvent, 0, len(order))
+	for _, id := range order {
+		result = append(result, *attemptsByID[id])
+	}
+
+	return result, nil
+}
+
 func NewTelemetryStore(ctx context.Context, connStr string) (*TelemetryStore, error) {
 	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
