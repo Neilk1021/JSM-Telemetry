@@ -45,6 +45,15 @@ func main() {
 		}
 	}()
 
+	go func() {
+		for attemptEvent := range mapCh {
+			err := store.StoreMapAttempt(ctx, attemptEvent)
+			if err != nil {
+				fmt.Println("failed to store map_attempt:", err)
+			}
+		}
+	}()
+
 	fmt.Println("listening on :9082")
 	http.ListenAndServe(":9082", nil)
 }
