@@ -35,7 +35,7 @@ func main() {
 	http.HandleFunc("/map_attempt", mapAttemptHandler.PostEvent)
 	http.HandleFunc("/event", eventHandler.PostEvent)
 	http.HandleFunc("/stats/events", statsHandler.GetEventStats)
-	http.HandleFunc("/stats/map_attempts", statsHandler.GetEventStats)
+	http.HandleFunc("/stats/map_attempts", statsHandler.GetMapStats)
 
 	go func() {
 		for event := range eventCh {
